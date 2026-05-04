@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Invoice;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class InvoiceController extends Controller
 {
@@ -140,5 +141,22 @@ class InvoiceController extends Controller
         $invoice->delete();
         return redirect()->route('invoices.index')
                          ->with('success', 'Invoice deleted successfully!');
+    }
+    public function downloadPdf(Invoice $invoice)
+    {
+    // Security check — can this user access this invoice?
+    abort_if($invoice->user_id !== auth()->id(), 403);
+
+    // Load relationships we need in the PDF
+    $invoice->load('client', 'items');
+
+    // Tell DomPDF which view to use and pass data to it
+    $pdf = Pdf::loadView('invoices.pdf', compact('invoice'));
+
+    // Set paper size
+    $pdf->setPaper('A4', 'portrait');
+
+    // Send PDF to browser as a download
+    return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
     }
 }
