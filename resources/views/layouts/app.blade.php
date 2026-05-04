@@ -18,7 +18,16 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
-
+@if($errors->any())
+<div class="mx-8 mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+    <p class="font-semibold mb-1">Please fix these errors:</p>
+    <ul class="list-disc list-inside space-y-1">
+        @foreach($errors->all() as $error)
+            <li>{{ $error }}</li>
+        @endforeach
+    </ul>
+</div>
+@endif    
 <div class="flex min-h-screen">
 
     {{-- SIDEBAR --}}
