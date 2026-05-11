@@ -1,1 +1,6 @@
-{"packages":{"php":{"version":"8.4"}}}
+{
+  "$schema": "https://schema.railpack.com",
+  "packages": {
+    "php": "8.4"
+  }
+}
