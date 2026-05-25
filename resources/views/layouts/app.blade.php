@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ config('app.name', 'Invoice Manager') }}</title>
+    <title>{{ config('app.name', 'InvoiceX') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap"
@@ -59,8 +59,10 @@
 
             {{-- Logo --}}
             <div class="px-6 py-6 border-b border-slate-700">
-                <h1 class="font-display text-2xl text-amber-400 tracking-tight">InvoiceX</h1>
-                <p class="text-slate-400 text-xs mt-0.5">Invoice Manager</p>
+                <div class="flex items-center gap-3">
+                    <img src="{{ asset('favicon.ico') }}" alt="IX" class="w-9 h-9">
+                    <h1 class="font-display text-2xl font-bold text-white tracking-tight">InvoiceX</h1>
+                </div>
             </div>
 
             {{-- User --}}

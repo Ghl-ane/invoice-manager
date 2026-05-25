@@ -44,7 +44,7 @@ class InvoiceController extends Controller
         $invoice = Invoice::create([
             'user_id'        => auth()->id(),
             'client_id'      => $request->client_id,
-            'invoice_number' => 'INV-' . strtoupper(uniqid()),
+            'invoice_number' => 'INV-' . str_pad(Invoice::count() + 1, 3, '0', STR_PAD_LEFT),
             'issue_date'     => $request->issue_date,
             'due_date'       => $request->due_date,
             'notes'          => $request->notes,
