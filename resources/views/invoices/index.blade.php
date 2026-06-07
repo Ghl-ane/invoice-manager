@@ -30,7 +30,7 @@
 
         {{-- Status filter --}}
         <select name="status"
-            class="text-sm border border-slate-200 rounded-lg px-3 py-2
+            class="text-sm bg-white border border-slate-200 rounded-lg px-3 py-2
                    focus:outline-none focus:ring-2 focus:ring-amber-400 text-slate-600">
             <option value="">All Statuses</option>
             <option value="draft" {{ request('status') == 'draft' ? 'selected' : '' }}>Draft</option>
