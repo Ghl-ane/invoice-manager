@@ -192,15 +192,15 @@
             <tr>
                 <td>{{ $item->description }}</td>
                 <td class="text-right">{{ $item->quantity }}</td>
-                <td class="text-right">${{ number_format($item->unit_price, 2) }}</td>
-                <td class="text-right">${{ number_format($item->subtotal, 2) }}</td>
+                <td class="text-right">{{ $invoice->symbol }}{{ number_format($item->unit_price, 2) }}</td>
+                <td class="text-right">{{ $invoice->symbol }}{{ number_format($item->subtotal, 2) }}</td>
             </tr>
             @endforeach
         </tbody>
         <tfoot>
             <tr class="total-row">
                 <td colspan="3">Total Amount</td>
-                <td class="text-right">${{ number_format($invoice->total, 2) }}</td>
+                <td class="text-right">{{ $invoice->symbol }}{{ number_format($invoice->total, 2) }} {{ $invoice->currency }}</td>
             </tr>
         </tfoot>
     </table>

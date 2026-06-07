@@ -13,6 +13,36 @@
 @endsection
 
 @section('content')
+    {{-- Search Bar --}}
+    <form method="GET" action="{{ route('clients.index') }}" class="flex flex-wrap gap-3 mb-4">
+
+        <div class="relative flex-1 min-w-[200px]">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none"
+                stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input type="text" name="search" value="{{ request('search') }}"
+                placeholder="Search by name, email or phone..."
+                class="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg
+                      focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
+        </div>
+
+        <button type="submit"
+            class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-semibold
+                   text-sm px-4 py-2 rounded-lg transition-colors">
+            Search
+        </button>
+
+        @if (request()->filled('search'))
+            <a href="{{ route('clients.index') }}"
+                class="text-sm px-4 py-2 rounded-lg border border-slate-200
+                  text-slate-500 hover:bg-slate-50 transition-colors">
+                Clear
+            </a>
+        @endif
+
+    </form>
 
     <div class="bg-white rounded-xl border border-slate-200">
         @if ($clients->isEmpty())
@@ -21,11 +51,21 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <p class="text-slate-400 text-sm mb-3">No clients yet</p>
-                <a href="{{ route('clients.create') }}" class="text-amber-500 text-sm hover:underline">Add your first client
-                    →</a>
+
+                @if (request()->filled('search'))
+                    {{-- Search returned nothing --}}
+                    <p class="text-slate-500 font-medium mb-1">No clients found</p>
+                    <p class="text-slate-400 text-sm mb-3">No results for "{{ request('search') }}"</p>
+                    <a href="{{ route('clients.index') }}" class="text-amber-500 text-sm hover:underline">Clear search →</a>
+                @else
+                    {{-- Truly empty --}}
+                    <p class="text-slate-400 text-sm mb-3">No clients yet</p>
+                    <a href="{{ route('clients.create') }}" class="text-amber-500 text-sm hover:underline">Add your first
+                        client →</a>
+                @endif
             </div>
         @else
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100">
@@ -74,6 +114,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
 
             {{-- Pagination --}}
             @if ($clients->hasPages())

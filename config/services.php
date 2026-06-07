@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'currency_api' => [
+        'key'      => env('CURRENCY_API_KEY'),
+        'base_url' => 'https://api.freecurrencyapi.com/v1',
+        'ttl'      => 3600, // cache live rates for 1 hour
+    ],
+
 ];

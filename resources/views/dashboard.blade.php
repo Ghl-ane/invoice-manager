@@ -15,7 +15,7 @@
 @section('content')
 
     {{-- Stat Cards --}}
-    <div class="grid grid-cols-4 gap-5 mb-8">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
 
         <div class="stat-card bg-white rounded-xl p-5 border border-slate-200">
             <div class="flex items-center justify-between mb-3">
@@ -56,8 +56,8 @@
                     </svg>
                 </div>
             </div>
-            <p class="text-3xl font-display text-slate-800">${{ number_format($totalRevenue, 2) }}</p>
-            <p class="text-xs text-slate-400 mt-1">From paid invoices</p>
+            <p class="text-3xl font-display text-slate-800">≈${{ number_format($totalRevenue, 2) }}</p>
+            <p class="text-xs text-slate-400 mt-1">USD equivalent · paid invoices</p>
         </div>
 
         <div class="stat-card bg-white rounded-xl p-5 border border-slate-200">
@@ -70,10 +70,27 @@
                     </svg>
                 </div>
             </div>
-            <p class="text-3xl font-display text-slate-800">${{ number_format($pendingAmount, 2) }}</p>
-            <p class="text-xs text-slate-400 mt-1">Awaiting payment</p>
+            <p class="text-3xl font-display text-slate-800">≈${{ number_format($pendingAmount, 2) }}</p>
+            <p class="text-xs text-slate-400 mt-1">USD equivalent · awaiting payment</p>
         </div>
 
+    </div>
+
+    {{-- Revenue Chart --}}
+    <div class="bg-white rounded-xl border border-slate-200 p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="font-semibold text-slate-700 text-sm">Monthly Revenue</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Paid invoices · USD equivalent · last 6 months</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-sm bg-amber-400 inline-block"></span>
+                <span class="text-xs text-slate-400">Revenue (USD)</span>
+            </div>
+        </div>
+        <div class="relative" style="height:220px">
+            <canvas id="revenueChart"></canvas>
+        </div>
     </div>
 
     {{-- Recent Invoices --}}
@@ -94,6 +111,7 @@
                     class="mt-3 inline-block text-xs text-amber-500 hover:underline">Create your first invoice →</a>
             </div>
         @else
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100">
@@ -129,12 +147,71 @@
                                 </span>
                             </td>
                             <td class="px-6 py-3 text-right font-semibold text-slate-700">
-                                ${{ number_format($invoice->total, 2) }}</td>
+                                {{ $invoice->symbol }}{{ number_format($invoice->total, 2) }}
+                                <span class="text-xs text-slate-400 ml-1">{{ $invoice->currency }}</span>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
+            </div>
         @endif
     </div>
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    const labels = @json($revenueChart['labels']);
+    const data   = @json($revenueChart['data']);
+
+    new Chart(document.getElementById('revenueChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Revenue (USD)',
+                data,
+                backgroundColor: 'rgba(251,191,36,0.85)',
+                borderColor:     'rgba(251,191,36,1)',
+                borderWidth:     0,
+                borderRadius:    6,
+                borderSkipped:   false,
+            }],
+        },
+        options: {
+            responsive:          true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ' $' + ctx.parsed.y.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                        }),
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    grid:  { display: false },
+                    ticks: { color: '#94a3b8', font: { size: 11 } },
+                },
+                y: {
+                    beginAtZero: true,
+                    grid:  { color: '#f1f5f9' },
+                    ticks: {
+                        color: '#94a3b8',
+                        font:  { size: 11 },
+                        callback: v => '$' + v.toLocaleString(),
+                    },
+                },
+            },
+        },
+    });
+}());
+</script>
+@endpush
 
 @endsection

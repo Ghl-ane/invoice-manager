@@ -2,161 +2,142 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreInvoiceRequest;
+use App\Http\Requests\UpdateInvoiceRequest;
+use App\Jobs\SendInvoiceJob;
 use App\Models\Client;
 use App\Models\Invoice;
-use Illuminate\Http\Request;
+use App\Services\CurrencyService;
+use App\Services\InvoiceService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class InvoiceController extends Controller
 {
-    // Show all invoices
-    public function index()
+    public function __construct(
+        private InvoiceService $invoiceService,
+        private CurrencyService $currencyService,
+    ) {}
+
+    public function index(Request $request): View
     {
         $invoices = Invoice::where('user_id', auth()->id())
-                           ->with('client')
-                           ->latest()
-                           ->paginate(10);
+            ->with('client')
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $search = $request->search;
+                $q->where(fn ($q) => $q
+                    ->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhereHas('client', fn ($q) => $q->where('name', 'like', "%{$search}%"))
+                );
+            })
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->when($request->filled('from'), fn ($q) => $q->whereDate('issue_date', '>=', $request->from))
+            ->when($request->filled('to'), fn ($q) => $q->whereDate('issue_date', '<=', $request->to))
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
         return view('invoices.index', compact('invoices'));
     }
 
-    // Show create form
-    public function create()
+    public function create(): View
     {
-        $clients = Client::where('user_id', auth()->id())->get();
-        return view('invoices.create', compact('clients'));
+        $clients    = Client::where('user_id', auth()->id())->get();
+        $currencies = $this->currencyService->all();
+
+        return view('invoices.create', compact('clients', 'currencies'));
     }
 
-    // Save new invoice
-    public function store(Request $request)
+    public function store(StoreInvoiceRequest $request): RedirectResponse
     {
-        $request->validate([
-            'client_id'  => 'required|exists:clients,id',
-            'issue_date' => 'required|date',
-            'due_date'   => 'required|date|after_or_equal:issue_date',
-            'notes'      => 'nullable|string',
-            'items'      => 'required|array|min:1',
-            'items.*.description' => 'required|string|max:500',
-            'items.*.quantity'    => 'required|integer|min:1',
-            'items.*.unit_price'  => 'required|numeric|min:0',
+        $invoice = $this->invoiceService->create(auth()->user(), $request->validated());
+
+        return redirect()->route('invoices.show', $invoice)->with('success', 'Invoice created successfully!');
+    }
+
+    public function show(Invoice $invoice): View
+    {
+        $this->authorize('view', $invoice);
+
+        return view('invoices.show', [
+            'invoice'    => $invoice->load('client', 'items'),
+            'currencies' => $this->currencyService->all(),
         ]);
+    }
 
-        // Create the invoice
-        $invoice = Invoice::create([
-            'user_id'        => auth()->id(),
-            'client_id'      => $request->client_id,
-            'invoice_number' => 'INV-' . str_pad(Invoice::count() + 1, 3, '0', STR_PAD_LEFT),
-            'issue_date'     => $request->issue_date,
-            'due_date'       => $request->due_date,
-            'notes'          => $request->notes,
-            'status'         => 'draft',
-            'total'          => 0,
+    public function edit(Invoice $invoice): View
+    {
+        $this->authorize('update', $invoice);
+
+        $clients    = Client::where('user_id', auth()->id())->get();
+        $currencies = $this->currencyService->all();
+
+        return view('invoices.edit', [
+            'invoice'    => $invoice->load('items'),
+            'clients'    => $clients,
+            'currencies' => $currencies,
         ]);
-
-        // Save items and calculate total
-        $total = 0;
-        foreach ($request->items as $item) {
-            $subtotal = $item['quantity'] * $item['unit_price'];
-            $invoice->items()->create([
-                'description' => $item['description'],
-                'quantity'    => $item['quantity'],
-                'unit_price'  => $item['unit_price'],
-                'subtotal'    => $subtotal,
-            ]);
-            $total += $subtotal;
-        }
-
-        $invoice->update(['total' => $total]);
-
-        return redirect()->route('invoices.show', $invoice)
-                         ->with('success', 'Invoice created successfully!');
     }
 
-    // Show single invoice
-    public function show(Invoice $invoice)
+    public function update(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
-        abort_if($invoice->user_id !== auth()->id(), 403);
-        $invoice->load('client', 'items');
-        return view('invoices.show', compact('invoice'));
+        $this->authorize('update', $invoice);
+
+        $this->invoiceService->update($invoice, $request->validated());
+
+        return redirect()->route('invoices.show', $invoice)->with('success', 'Invoice updated successfully!');
     }
 
-    // Show edit form
-    public function edit(Invoice $invoice)
+    public function destroy(Invoice $invoice): RedirectResponse
     {
-        abort_if($invoice->user_id !== auth()->id(), 403);
-        $clients = Client::where('user_id', auth()->id())->get();
-        $invoice->load('items');
-        return view('invoices.edit', compact('invoice', 'clients'));
-    }
+        $this->authorize('delete', $invoice);
 
-    // Update invoice
-    public function update(Request $request, Invoice $invoice)
-    {
-        abort_if($invoice->user_id !== auth()->id(), 403);
-
-        $request->validate([
-            'client_id'  => 'required|exists:clients,id',
-            'issue_date' => 'required|date',
-            'due_date'   => 'required|date|after_or_equal:issue_date',
-            'status'     => 'required|in:draft,sent,paid,overdue',
-            'notes'      => 'nullable|string',
-            'items'      => 'required|array|min:1',
-            'items.*.description' => 'required|string',
-            'items.*.quantity'    => 'required|integer|min:1',
-            'items.*.unit_price'  => 'required|numeric|min:0',
-        ]);
-
-        // Delete old items and recreate
-        $invoice->items()->delete();
-
-        $total = 0;
-        foreach ($request->items as $item) {
-            $subtotal = $item['quantity'] * $item['unit_price'];
-            $invoice->items()->create([
-                'description' => $item['description'],
-                'quantity'    => $item['quantity'],
-                'unit_price'  => $item['unit_price'],
-                'subtotal'    => $subtotal,
-            ]);
-            $total += $subtotal;
-        }
-
-        $invoice->update([
-            'client_id'  => $request->client_id,
-            'issue_date' => $request->issue_date,
-            'due_date'   => $request->due_date,
-            'status'     => $request->status,
-            'notes'      => $request->notes,
-            'total'      => $total,
-        ]);
-
-        return redirect()->route('invoices.show', $invoice)
-                         ->with('success', 'Invoice updated successfully!');
-    }
-
-    // Delete invoice
-    public function destroy(Invoice $invoice)
-    {
-        abort_if($invoice->user_id !== auth()->id(), 403);
         $invoice->items()->delete();
         $invoice->delete();
-        return redirect()->route('invoices.index')
-                         ->with('success', 'Invoice deleted successfully!');
+
+        return redirect()->route('invoices.index')->with('success', 'Invoice deleted successfully!');
     }
-    public function downloadPdf(Invoice $invoice)
+
+    public function send(Invoice $invoice): RedirectResponse
     {
-    // Security check — can this user access this invoice?
-    abort_if($invoice->user_id !== auth()->id(), 403);
+        $this->authorize('update', $invoice);
 
-    // Load relationships we need in the PDF
-    $invoice->load('client', 'items');
+        SendInvoiceJob::dispatch($invoice);
 
-    // Tell DomPDF which view to use and pass data to it
-    $pdf = Pdf::loadView('invoices.pdf', compact('invoice'));
+        return redirect()->route('invoices.show', $invoice)
+            ->with('success', "Invoice queued for delivery to {$invoice->client->email}.");
+    }
 
-    // Set paper size
-    $pdf->setPaper('A4', 'portrait');
+    // Generates a 7-day signed share link and flashes it back to the show page.
+    public function shareLink(Invoice $invoice): RedirectResponse
+    {
+        $this->authorize('view', $invoice);
 
-    // Send PDF to browser as a download
-    return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
+        $url = URL::signedRoute('invoices.shared', ['invoice' => $invoice], now()->addDays(7));
+
+        return redirect()->route('invoices.show', $invoice)
+            ->with('share_url', $url);
+    }
+
+    // Public view — no auth required, but the signed middleware validates the URL.
+    public function shared(Invoice $invoice): View
+    {
+        return view('invoices.shared', [
+            'invoice' => $invoice->load('client', 'items'),
+        ]);
+    }
+
+    public function downloadPdf(Invoice $invoice): Response
+    {
+        $this->authorize('view', $invoice);
+
+        $invoice->load('client', 'items');
+        $pdf = Pdf::loadView('invoices.pdf', compact('invoice'))->setPaper('A4', 'portrait');
+
+        return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
     }
 }

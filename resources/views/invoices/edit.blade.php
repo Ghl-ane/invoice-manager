@@ -37,6 +37,21 @@
                 </div>
 
                 <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Currency <span class="text-red-400">*</span></label>
+                    <select name="currency" id="currency-select"
+                        class="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                        onchange="onCurrencyChange(this)">
+                        @foreach($currencies as $code => $data)
+                            <option value="{{ $code }}"
+                                data-symbol="{{ $data['symbol'] }}"
+                                {{ old('currency', $invoice->currency) === $code ? 'selected' : '' }}>
+                                {{ $code }} — {{ $data['symbol'] }} {{ $data['name'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1.5">Issue Date <span class="text-red-400">*</span></label>
                     <input type="date" name="issue_date" value="{{ old('issue_date', $invoice->issue_date) }}"
                         class="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
@@ -73,11 +88,11 @@
                             class="item-qty w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
                     </div>
                     <div class="col-span-3">
-                        <input type="number" name="items[{{ $i }}][unit_price]" value="{{ $item->unit_price }}" min="0" step="1"
+                        <input type="number" name="items[{{ $i }}][unit_price]" value="{{ $item->unit_price }}" min="0" step="0.01"
                             class="item-price w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
                     </div>
                     <div class="col-span-2 flex items-center justify-end gap-2">
-                        <span class="item-subtotal text-sm font-medium text-slate-700">${{ number_format($item->subtotal, 2) }}</span>
+                        <span class="item-subtotal text-sm font-medium text-slate-700">{{ number_format($item->subtotal, 2) }}</span>
                         <button type="button" onclick="removeItem(this)" class="text-slate-300 hover:text-red-400 transition-colors">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
@@ -101,13 +116,15 @@
 
     </div>
 
-    <div class="col-span-1">
+    <div class="col-span-1 space-y-4">
         <div class="bg-white rounded-xl border border-slate-200 p-6 sticky top-24">
             <h3 class="font-semibold text-slate-700 text-sm mb-4">Summary</h3>
             <div class="space-y-3 mb-4">
                 <div class="flex justify-between text-sm">
                     <span class="text-slate-500">Total</span>
-                    <span id="summary-total" class="font-bold text-xl text-slate-800">${{ number_format($invoice->total, 2) }}</span>
+                    <span id="summary-total" class="font-bold text-xl text-slate-800">
+                        <span class="currency-symbol">{{ $invoice->symbol }}</span>{{ number_format($invoice->total, 2) }}
+                    </span>
                 </div>
             </div>
             <button type="submit" class="w-full bg-amber-400 hover:bg-amber-500 text-slate-900 font-semibold text-sm py-3 rounded-lg transition-colors">
@@ -124,6 +141,16 @@
 
 <script>
 let itemIndex = {{ $invoice->items->count() }};
+let currentSymbol = document.querySelector('#currency-select option:checked')?.dataset.symbol ?? '{{ $invoice->symbol }}';
+
+function onCurrencyChange(select) {
+    currentSymbol = select.options[select.selectedIndex].dataset.symbol;
+    updateAllSymbols();
+}
+
+function updateAllSymbols() {
+    document.querySelectorAll('.currency-symbol').forEach(el => el.textContent = currentSymbol);
+}
 
 function addItem() {
     const container = document.getElementById('items-container');
@@ -143,7 +170,7 @@ function addItem() {
                 class="item-price w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
         </div>
         <div class="col-span-2 flex items-center justify-end gap-2">
-            <span class="item-subtotal text-sm font-medium text-slate-700">$0.00</span>
+            <span class="item-subtotal text-sm font-medium text-slate-700">0.00</span>
             <button type="button" onclick="removeItem(this)" class="text-slate-300 hover:text-red-400 transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
@@ -155,8 +182,7 @@ function addItem() {
 }
 
 function removeItem(btn) {
-    const rows = document.querySelectorAll('.item-row');
-    if (rows.length > 1) {
+    if (document.querySelectorAll('.item-row').length > 1) {
         btn.closest('.item-row').remove();
         calculateTotal();
     }
@@ -173,13 +199,15 @@ function calculateTotal() {
         const qty   = parseFloat(row.querySelector('.item-qty').value) || 0;
         const price = parseFloat(row.querySelector('.item-price').value) || 0;
         const sub   = qty * price;
-        row.querySelector('.item-subtotal').textContent = '$' + sub.toFixed(2);
+        row.querySelector('.item-subtotal').textContent = sub.toFixed(2);
         total += sub;
     });
-    document.getElementById('summary-total').textContent = '$' + total.toFixed(2);
+    const symEl = document.getElementById('summary-total').querySelector('.currency-symbol');
+    symEl.nextSibling.textContent = total.toFixed(2);
 }
 
 document.querySelectorAll('.item-row').forEach(row => attachListeners(row));
+updateAllSymbols();
 </script>
 
 @endsection

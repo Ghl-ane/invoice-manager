@@ -2,87 +2,75 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreClientRequest;
+use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class ClientController extends Controller
 {
-    // Show all clients
-    public function index()
+    public function index(Request $request): View
     {
         $clients = Client::where('user_id', auth()->id())
-                         ->latest()
-                         ->paginate(10);
+            ->withCount('invoices')
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $search = $request->search;
+                $q->where(fn ($q) => $q
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                );
+            })
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
         return view('clients.index', compact('clients'));
     }
 
-    // Show create form
-    public function create()
+    public function create(): View
     {
         return view('clients.create');
     }
 
-    // Save new client
-    public function store(Request $request)
+    public function store(StoreClientRequest $request): RedirectResponse
     {
-        $request->validate([
-            'name'  => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:clients,email,NULL,id,user_id,' . auth()->id(),
-            'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string',
-        ]);
+        Client::create(['user_id' => auth()->id(), ...$request->validated()]);
 
-        Client::create([
-            'user_id' => auth()->id(),
-            'name'    => $request->name,
-            'email'   => $request->email,
-            'phone'   => $request->phone,
-            'address' => $request->address,
-        ]);
-
-        return redirect()->route('clients.index')
-                         ->with('success', 'Client created successfully!');
+        return redirect()->route('clients.index')->with('success', 'Client created successfully!');
     }
 
-    // Show single client
-    public function show(Client $client)
+    public function show(Client $client): View
     {
-        abort_if($client->user_id !== auth()->id(), 403);
-        $client->load('invoices');
-        return view('clients.show', compact('client'));
+        $this->authorize('view', $client);
+
+        return view('clients.show', ['client' => $client->load('invoices')]);
     }
 
-    // Show edit form
-    public function edit(Client $client)
+    public function edit(Client $client): View
     {
-        abort_if($client->user_id !== auth()->id(), 403);
+        $this->authorize('update', $client);
+
         return view('clients.edit', compact('client'));
     }
 
-    // Update client
-    public function update(Request $request, Client $client)
+    public function update(UpdateClientRequest $request, Client $client): RedirectResponse
     {
-        abort_if($client->user_id !== auth()->id(), 403);
+        $this->authorize('update', $client);
 
-        $request->validate([
-            'name'    => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:clients,email,' . $client->id . ',id,user_id,' . auth()->id(),
-            'phone'   => 'nullable|string|max:20',
-            'address' => 'nullable|string',
-        ]);
+        $client->update($request->validated());
 
-        $client->update($request->only('name', 'email', 'phone', 'address'));
-
-        return redirect()->route('clients.index')
-                         ->with('success', 'Client updated successfully!');
+        return redirect()->route('clients.index')->with('success', 'Client updated successfully!');
     }
 
-    // Delete client
-    public function destroy(Client $client)
+    public function destroy(Client $client): RedirectResponse
     {
-        abort_if($client->user_id !== auth()->id(), 403);
+        $this->authorize('delete', $client);
+
         $client->delete();
-        return redirect()->route('clients.index')
-                         ->with('success', 'Client deleted successfully!');
+
+        return redirect()->route('clients.index')->with('success', 'Client deleted successfully!');
     }
 }
