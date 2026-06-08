@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Invoice;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class InvoiceService
 {
@@ -45,10 +46,16 @@ class InvoiceService
 
     private function nextInvoiceNumber(User $user): string
     {
-        $last = Invoice::where('user_id', $user->id)->orderBy('id', 'desc')->first();
-        $next = $last ? (int) str_replace('INV-', '', $last->invoice_number) + 1 : 1;
+        return DB::transaction(function () use ($user) {
+            $last = Invoice::where('user_id', $user->id)
+                ->orderBy('id', 'desc')
+                ->lockForUpdate()
+                ->first();
 
-        return 'INV-' . str_pad($next, 3, '0', STR_PAD_LEFT);
+            $next = $last ? (int) str_replace('INV-', '', $last->invoice_number) + 1 : 1;
+
+            return 'INV-' . str_pad($next, 3, '0', STR_PAD_LEFT);
+        });
     }
 
     private function saveItems(Invoice $invoice, array $items): float
